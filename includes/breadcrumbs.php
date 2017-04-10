@@ -32,6 +32,5 @@ class Breadcrumbs {
 	private static function clean_url($crumb) {
 		$crumb = str_replace(['.php', '_'], ['', ' '], $crumb);
 		return $crumb;
-	}
-  
+	}  
 }
