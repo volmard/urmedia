@@ -1,418 +1,372 @@
 <?php
+error_reporting(E_ALL);
+require_once("functions.php");
+require_once("dbobject.php");
 
-class Product extends DbObject {
+class Product extends DBObject {
 	
-	protected static $table_name  = "products";
-	protected static $inner_table = "brands";
-	protected static $table_image = "images";
+	protected $tableName  = "products";
+	protected $innerTable = "brands";
+	protected $tableImage = "images";
 	
-	protected static $db_fields;	
-	public $id;	
-	public $brand_id;
+	protected $dbFields;
+	public $multi =0;
+	public $id;
+  public $brandId;
 	public $title;
 	public $price;
-	public $new_price;
-	public $new_one;
+	public $newPrice;
+	public $newOne;
 	public $quantity;
 	public $visible;
 	public $description;
-	public $short_description;
+	public $shortDescription;
 	public $image;
 	public $keywords;
-  public $brand_title;
-  public $cat_id;
+  public $brandTitle;
 	public $type;
 	public $size;
-	private $temp_path;
+	private $tempPath;
   public $caption;
-	public $cart_quantity;
-	public $total_price;
+	public $cartQuantity;
 	
-	function __construct() {
-		self::$db_fields = self::get_fields_name();
+	// @ 'dbFields' used for select mysql command, 'dbFieldsJoin' used for insert/update/delete mysql commands
+	// @ it's done to avoid error of different number of mysql table fields and object attributes
+	// @ that's why u can find additional flag $join on some functions
+	public function __construct(DB $db)         {
+		$this->con      = $db;
+		$this->dbFields = [ 
+												'dbFields'     => $this->getFieldsName(false), 
+												'dbFieldsJoin' =>	$this->getFieldsName()
+		];
 	}
 	
-	public function save($file = 0) {	
-		$this->create_prepared();
-		$images = new Uploads();
-		$images->save_multiple_file($file, $this->id);
-		return true;
-	}
+//	public function save($file = 0)             {
+//		$image = new Uploads($this->con);		
+//		if($this->create() && $image->saveMultipleFile($file, $this->id)) 
+//			return true;		
+//		return false;		
+//	}
 	
-	public function image_path() {
-		return $this->upload_dir.DS.$this->image;
-	}	
+	// @queries
 	
-	public static function find_with_brand() {
-		$sql = "SELECT "
-		        .self::$table_name.".id,"
-						.self::$table_name.".brand_id,"
-						.self::$table_name.".title,"
-						.self::$table_name.".image,"
-						.self::$table_name.".price,"
-						.self::$inner_table.".brand_title
-						FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		return self::find_by_sql($sql);
-	}
-	
-	public static function find_with_pagination($per_page=1, $offset=0, $sort_array=0) {
-$sql = "SELECT "
-	          .self::$table_name.".id,"
-		        .self::$table_name.".title,"
-						.self::$table_image.".image,"
-						.self::$table_image.".caption,"
-		        .self::$table_name.".price,"
-						.self::$table_name.".new_price,"
-		        .self::$table_name.".new_one,"
-		        .self::$table_name.".quantity,"
-		        .self::$table_name.".visible,"
-		        .self::$inner_table.".brand_title
-		        FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$table_image;
-		$sql .=	" ON ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= " AND ";
-		$sql .= self::$table_image.".id=";
-		$sql .= "(SELECT MIN(";
-		$sql .= self::$table_image.".id";
-		$sql .= ")";
-		$sql .= " FROM ";
-		$sql .= self::$table_image;
-		$sql .= " WHERE ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= ") ";
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		$sql .= self::switcher($sort_array);
-		$sql .= " LIMIT {$per_page} ";
-		$sql .= "OFFSET {$offset}";
-		return self::find_by_sql($sql);
-	}
-	
-	private static function switcher($sort_array=0) {
-		switch($sort_array[0]){ 
-    case 'price': 
-      $sql  = " ORDER BY price";			
-    break;
-		case 'title': 
-      $sql  = " ORDER BY ".self::$table_name.".title";			
-    break;  
-    default:
-			$sql  = "";
-    }
-		if($sort_array[1] == "desc" && $sort_array[0] !== 0){
-			$sql .= " DESC";	
-		}
-		return $sql;
-	}
-	
-	public static function find_and_sort_by_price($per_page=1, $offset=0) {
-    $sql  = "SELECT "
-	          .self::$table_name.".id,"
-		        .self::$table_name.".title,"
-						.self::$table_image.".image,"
-						.self::$table_image.".caption,"
-		        .self::$table_name.".price,"
-						.self::$table_name.".new_price,"
-		        .self::$table_name.".new_one,"
-		        .self::$table_name.".quantity,"
-		        .self::$table_name.".visible,"
-		        .self::$inner_table.".brand_title
-		        FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$table_image;
-		$sql .=	" ON ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= " AND ";
-		$sql .= self::$table_image.".id=";
-		$sql .= "(SELECT MIN(";
-		$sql .= self::$table_image.".id";
-		$sql .= ")";
-		$sql .= " FROM ";
-		$sql .= self::$table_image;
-		$sql .= " WHERE ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= ") ";
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		$sql .= " ORDER BY price";
-		$sql .= " LIMIT {$per_page} ";
-		$sql .= "OFFSET {$offset}";		
-		return self::find_by_sql($sql);
-	}
-	
-	public static function find_by_brand_with_pagination($per_page=1, $offset=0, $brand=0) {
-    $sql = "SELECT "
-	          .self::$table_name.".id,"
-		        .self::$table_name.".title,"
-						.self::$table_image.".image,"
-						.self::$table_image.".caption,"
-		        .self::$table_name.".price,"
-						.self::$table_name.".new_price,"
-		        .self::$table_name.".new_one,"
-		        .self::$table_name.".quantity,"
-		        .self::$table_name.".visible,"
-		        .self::$inner_table.".brand_title
-		        FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$table_image;
-		$sql .=	" ON ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= " AND ";
-		$sql .= self::$table_image.".id=";
-		$sql .= "(SELECT MIN(";
-		$sql .= self::$table_image.".id";
-		$sql .= ")";
-		$sql .= " FROM ";
-		$sql .= self::$table_image;
-		$sql .= " WHERE ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
-		$sql .= ") ";
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-			if($brand) :
-			  $sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-			  $sql .= " AND ";
-		    $sql .= self::$inner_table.".brand_title=?";
-			else :
-			  $sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-			endif;	
-		$sql .= " LIMIT {$per_page} ";
-		$sql .= "OFFSET {$offset}";
-			if($brand) :
-			  $result_array = self::find_by_sql_prepared($sql, $brand);
-		    return !empty($result_array) ? $result_array : false;
-			else :
-			  return self::find_by_sql($sql);
-			endif;		
-	}
-	
-	
-		public static function find_with_brand_and_pagination($per_page=1, $offset=0, $brand="") {
-		global $database;
-    $sql = "SELECT "
-	          .self::$table_name.".id,"
-		        .self::$table_name.".title,"
-		        .self::$table_name.".image,"
-		        .self::$table_name.".price,"
-						.self::$table_name.".new_price,"
-		        .self::$table_name.".new_one,"
-		        .self::$table_name.".quantity,"
-		        .self::$table_name.".visible,"
-						.self::$table_name.".description,"
-		        .self::$table_name.".short_description,"
-		        .self::$table_name.".image,"
-		        .self::$table_name.".caption,"
-						.self::$table_name.".keywords,"
-		        .self::$inner_table.".brand_title
-		        FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-			if($brand) :
-			  $sql .= self::$inner_table.".id=?";
-			else :
-			  $sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-			endif;		
-		$sql .= " LIMIT {$per_page} ";
-		$sql .= "OFFSET {$offset}";	
-		  if($brand) :
-			  $result_array = self::find_by_sql_prepared($sql, $brand);
-		    return !empty($result_array) ? $result_array : false;
-			else :
-			  return self::find_by_sql($sql);
-			endif;		
-  }
-	
-	public static function find_brands () {
-		$sql = "SELECT * FROM ";
-		$sql .=	self::$inner_table;
-		return self::find_by_sql($sql);
-	}
-	
-	//dev 
-	
-	public static function find_images() {
+	/* @dev */
+	public static function findImages()         {
 		$sql  = "SELECT * FROM ";
 		$sql .=	"images";
 		$sql .= " GROUP BY ";
-		$sql .= "product_id";
-		return self::find_by_sql($sql);
+		$sql .= "productId";
+		
+		return self::findBySql($sql);
 	}
 	
-	public static function find_all_images() {
+	public static function findAllImages()      {
 		$sql  = "SELECT * FROM ";
 		$sql .=	"images";
-		return self::find_by_sql($sql);
-	}
+		
+		return self::findBySql($sql);
+	}	
+	/* * */
 	
-	//dev ends
-	
-	public static function find_item_by_id ($id=0) {
+	public function findAllPaginated($perPage = 1, $offset = 0, $sortArray = 0)                 {
     $sql = "SELECT "
-		        .self::$table_name.".id,"
-				    .self::$table_name.".title,"
-				    .self::$table_name.".image,"
-				    .self::$table_name.".price,"
-				    .self::$inner_table.".brand_title
-				    FROM ";
-		$sql .= self::$table_name;
-		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
-		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		$sql .= " AND ";
-		$sql .= self::$table_name.".id={$id}";
-		$sql .= " LIMIT 1";
-		$result_array = static::find_by_sql($sql);
-		return !empty($result_array) ? array_shift($result_array) : false;    
-  }
-	
-	public static function find_item_by_id_stmt ($id=0) {
-		global $database;
-    $sql          = "SELECT "
-	                  .self::$table_name.".id,"
-		                .self::$table_name.".title,"
-		                .self::$table_image.".image,"
-		                .self::$table_name.".price,"
-						        .self::$table_name.".new_price,"
-		                .self::$table_name.".new_one,"
-		                .self::$table_name.".quantity,"
-		                .self::$table_name.".visible,"
-						        .self::$table_name.".description,"
-		                .self::$table_name.".short_description,"
-		                .self::$table_image.".caption,"
-						        .self::$table_name.".keywords,"
-		                .self::$inner_table.".brand_title
-		                FROM ";
-		$sql         .= self::$table_name;
-		$sql         .=	" INNER JOIN ";
-		$sql         .=	self::$table_image;
-		$sql         .=	" ON ";
-		$sql         .= self::$table_name.".id=".self::$table_image.".product_id";
-		$sql         .=	" INNER JOIN ";
-		$sql         .=	self::$inner_table;
-		$sql         .=	" ON ";
-		$sql         .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		$sql         .= " AND ";
-		$sql         .= self::$table_name.".id=?";
-		$result_array = self::find_by_sql_prepared($sql, $id);
-		return !empty($result_array) ? $result_array : false;		
-  }
-	
-	public static function find_item_by_title ($id=0) {
-		global $database;
-    $sql          = "SELECT "
-	                  .self::$table_name.".id,"
-		                .self::$table_name.".title,"
-		                .self::$table_image.".image,"
-		                .self::$table_name.".price,"
-						        .self::$table_name.".new_price,"
-		                .self::$table_name.".new_one,"
-		                .self::$table_name.".quantity,"
-		                .self::$table_name.".visible,"
-						        .self::$table_name.".description,"
-		                .self::$table_name.".short_description,"
-		                .self::$table_image.".caption,"
-						        .self::$table_name.".keywords,"
-		                .self::$inner_table.".brand_title
-		                FROM ";
-		$sql         .= self::$table_name;
-		$sql         .=	" INNER JOIN ";
-		$sql         .=	self::$table_image;
-		$sql         .=	" ON ";
-		$sql         .= self::$table_name.".id=".self::$table_image.".product_id";
-		$sql         .=	" INNER JOIN ";
-		$sql         .=	self::$inner_table;
-		$sql         .=	" ON ";
-		$sql         .= self::$inner_table.".id=".self::$table_name.".brand_id";
-		$sql         .= " AND ";
-		$sql         .= self::$table_name.".title=?";
-		$result_array = self::find_by_sql_prepared($sql, $id);
-		return !empty($result_array) ? $result_array : false;		
-  }
-	
-  public static function find_all_items_by_brand ($id=0, $lim=0, $rand=false) {
-		global $database;
-    $sql = "SELECT "
-	          .self::$table_name.".id,"
-		        .self::$table_name.".title,"
-						.self::$table_image.".image,"
-						.self::$table_image.".caption,"
-		        .self::$table_name.".price,"
-						.self::$table_name.".new_price,"
-		        .self::$table_name.".new_one,"
-		        .self::$table_name.".quantity,"
-		        .self::$table_name.".visible,"
-		        .self::$inner_table.".brand_title
+	          .$this->tableName.".id,"
+		        .$this->tableName.".title,"
+						.$this->tableImage.".image,"
+						.$this->tableImage.".caption,"
+		        .$this->tableName.".price,"
+						.$this->tableName.".newPrice,"
+		        .$this->tableName.".newOne,"
+		        .$this->tableName.".quantity,"
+		        .$this->tableName.".visible,"
+		        .$this->innerTable.".brandTitle
 		        FROM ";
-		$sql .= self::$table_name;
+		$sql .= $this->tableName;
+		
+		// @images table
 		$sql .=	" INNER JOIN ";
-		$sql .=	self::$table_image;
+		$sql .=	$this->tableImage;
 		$sql .=	" ON ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
 		$sql .= " AND ";
-		$sql .= self::$table_image.".id=";
+		$sql .= $this->tableImage.".id=";
 		$sql .= "(SELECT MIN(";
-		$sql .= self::$table_image.".id";
+		$sql .= $this->tableImage.".id";
 		$sql .= ")";
 		$sql .= " FROM ";
-		$sql .= self::$table_image;
+		$sql .= $this->tableImage;
 		$sql .= " WHERE ";
-		$sql .= self::$table_image.".product_id=".self::$table_name.".id";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
 		$sql .= ") ";
+		
+		// @brands table		
 		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
+		$sql .=	$this->innerTable;
 		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
+		$sql .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql .= $this->switcher($sortArray);
+		$sql .= " LIMIT {$perPage} ";
+		$sql .= "OFFSET {$offset}";
+		return $this->findBySql($sql);
+	}
+	
+	private function switcher($sortArray = 0)                                                   {
+		switch($sortArray[0]) : 
+      case 'price': 
+        $sql  = " ORDER BY price";			
+        break;
+		  case 'title': 
+        $sql  = " ORDER BY ".$this->tableName.".title";			
+        break;  
+      default:
+		  	$sql  = "";
+    endswitch;
+		if($sortArray[1] == "desc" && $sortArray[0] !== 0)
+			$sql .= " DESC";	
+
+		return $sql;
+	}
+	
+	/*TODO*/
+	public function findAllItemsByBrand ($id = 0, $lim = 0, $rand = false)                      {		
+    $sql = "SELECT "
+	          .$this->tableName.".id,"
+		        .$this->tableName.".title,"
+						.$this->tableImage.".image,"
+						.$this->tableImage.".caption,"
+		        .$this->tableName.".price,"
+						.$this->tableName.".newPrice,"
+		        .$this->tableName.".newOne,"
+		        .$this->tableName.".quantity,"
+		        .$this->tableName.".visible,"
+		        .$this->innerTable.".brandTitle
+		        FROM ";
+		$sql .= $this->tableName;
+		
+		// @images table	
+		$sql .=	" INNER JOIN ";
+		$sql .=	$this->tableImage;
+		$sql .=	" ON ";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
 		$sql .= " AND ";
-		$sql .= self::$table_name.".brand_id=?";
-		if ($rand !== 0) {
-      $sql .= " ORDER BY RAND()";        
-    }
-    if ($lim !== 0) {
-      $sql .= " LIMIT 0, {$lim}";        
-    }      
-		$result_array = static::find_by_sql_prepared($sql, $id);
-		return !empty($result_array) ? $result_array : false;
+		$sql .= $this->tableImage.".id=";
+		$sql .= "(SELECT MIN(";
+		$sql .= $this->tableImage.".id";
+		$sql .= ")";
+		$sql .= " FROM ";
+		$sql .= $this->tableImage;
+		$sql .= " WHERE ";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
+		$sql .= ") ";
+		
+		// @brands table
+		$sql .=	" INNER JOIN ";
+		$sql .=	$this->innerTable;
+		$sql .=	" ON ";
+		$sql .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql .= " AND ";
+		$sql .= $this->tableName.".brandId={$id}";
+		if ($rand)
+      $sql .= " ORDER BY RAND()";
+    if ($lim)
+      $sql .= " LIMIT 0, {$lim}"; 
+		
+		
+		$resultArr = $this->findBySql($sql);
+		return $resultArr;
   }
 	
-	protected static function get_fields_name() {
-		global $database;
-	  $sql = "SELECT * FROM ";
-		$sql .= self::$table_name;
+	public function findByPaginatedBrand($perPage = 1, $offset = 0, $brand = "", $rand = false) {
+    $sql = "SELECT "
+	          .$this->tableName.".id,"
+		        .$this->tableName.".title,"
+						.$this->tableImage.".image,"
+						.$this->tableImage.".caption,"
+		        .$this->tableName.".price,"
+						.$this->tableName.".newPrice,"
+		        .$this->tableName.".newOne,"
+		        .$this->tableName.".quantity,"
+		        .$this->tableName.".visible,"
+		        .$this->innerTable.".brandTitle
+		        FROM ";
+		$sql .= $this->tableName;
+		
+		// @images table	
 		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table;
+		$sql .=	$this->tableImage;
 		$sql .=	" ON ";
-		$sql .= self::$inner_table.".id=".self::$table_name.".brand_id";
-    $result = $database->query($sql);
-		$finfo = $result->fetch_fields();
-		$db_fields=[];
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
+		$sql .= " AND ";
+		$sql .= $this->tableImage.".id=";
+		$sql .= "(SELECT MIN(";
+		$sql .= $this->tableImage.".id";
+		$sql .= ")";
+		$sql .= " FROM ";
+		$sql .= $this->tableImage;
+		$sql .= " WHERE ";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
+		$sql .= ") ";
+		
+		// @brands table	
+		$sql .=	" INNER JOIN ";
+		$sql .=	$this->innerTable;
+		$sql .=	" ON ";
+		$sql .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql .= " AND ";
+		$sql .= $this->innerTable.".brandTitle=?";
+		if ($rand)
+      $sql .= " ORDER BY RAND()";
+		$sql   .= " LIMIT {$perPage} ";
+		$sql   .= "OFFSET {$offset}";
+		
+		$resultArr = $this->findBySql($sql, $brand);
+		return $resultArr;
+	}
+	
+	public function findBrands()                                                                {
+		$sql  = "SELECT * FROM ";
+		$sql .=	$this->innerTable;
+		
+		return $this->findBySql($sql);
+	}
+	
+	public function findItemById($id = 0)                                                       {		
+    $sql          = "SELECT "
+	                  .$this->tableName.".id,"
+		                .$this->tableName.".title,"
+		                .$this->tableImage.".image,"
+		                .$this->tableName.".price,"
+						        .$this->tableName.".newPrice,"
+		                .$this->tableName.".newOne,"
+		                .$this->tableName.".quantity,"
+		                .$this->tableName.".visible,"
+						        .$this->tableName.".description,"
+		                .$this->tableName.".shortDescription,"
+		                .$this->tableImage.".caption,"
+						        .$this->tableName.".keywords,"
+		                .$this->innerTable.".brandTitle
+		                FROM ";
+		$sql         .= $this->tableName;
+		
+		// @images table	
+		$sql         .=	" INNER JOIN ";
+		$sql         .=	$this->tableImage;
+		$sql         .=	" ON ";
+		$sql         .= $this->tableName.".id=".$this->tableImage.".productId";
+		
+		// @brands table	
+		$sql         .=	" INNER JOIN ";
+		$sql         .=	$this->innerTable;
+		$sql         .=	" ON ";
+		$sql         .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql         .= " AND ";
+		$sql         .= $this->tableName.".id=?";		
+		$sql         .= " LIMIT 1";	  		
+		
+		$resultArr = $this->findBySql($sql, $id);
+		return $resultArr;		
+  }
+	
+	public function findItemByIds($ids = [])                                                    {		
+		$placeholders = placeholders(count($ids));
+		
+    $sql = "SELECT "
+		        .$this->tableName.".id,"
+				    .$this->tableName.".title,"
+				    .$this->tableImage.".image,"
+						.$this->tableImage.".caption,"
+				    .$this->tableName.".price,"
+						.$this->tableName.".description,"
+		        .$this->tableName.".shortDescription,"
+				    .$this->innerTable.".brandTitle
+				    FROM ";
+		$sql .= $this->tableName;
+		$sql .=	" INNER JOIN ";
+		$sql .=	$this->tableImage;
+		$sql .=	" ON ";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
+		$sql .= " AND ";
+		$sql .= $this->tableImage.".id=";
+		$sql .= "(SELECT MIN(";
+		$sql .= $this->tableImage.".id";
+		$sql .= ")";
+		$sql .= " FROM ";
+		$sql .= $this->tableImage;
+		$sql .= " WHERE ";
+		$sql .= $this->tableImage.".productId=".$this->tableName.".id";
+		$sql .= ") ";
+		$sql .=	" INNER JOIN ";
+		$sql .=	$this->innerTable;
+		$sql .=	" ON ";
+		$sql .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql .= " AND ";
+		$sql .= $this->tableName.".id IN ($placeholders)";
+		
+		return $this->findBySql($sql, $ids);
+  }
+	
+	public function findItemByTitle($title = "")                                                {		
+    $sql          = "SELECT "
+	                  .$this->tableName.".id,"
+		                .$this->tableName.".title,"
+		                .$this->tableImage.".image,"
+		                .$this->tableName.".price,"
+						        .$this->tableName.".newPrice,"
+		                .$this->tableName.".newOne,"
+		                .$this->tableName.".quantity,"
+		                .$this->tableName.".visible,"
+						        .$this->tableName.".description,"
+		                .$this->tableName.".shortDescription,"
+		                .$this->tableImage.".caption,"
+						        .$this->tableName.".keywords,"
+		                .$this->innerTable.".brandTitle
+		                FROM ";
+		$sql         .= $this->tableName;
+		
+		// @images table	
+		$sql         .=	" INNER JOIN ";
+		$sql         .=	$this->tableImage;
+		$sql         .=	" ON ";
+		$sql         .= $this->tableName.".id=".$this->tableImage.".productId";
+		
+		// @brands table
+		$sql         .=	" INNER JOIN ";
+		$sql         .=	$this->innerTable;
+		$sql         .=	" ON ";
+		$sql         .= $this->innerTable.".id=".$this->tableName.".brandId";
+		$sql         .= " AND ";		
+		 $sql        .= $this->tableName.".title = ?";		
+//		  $sql       .= " LIMIT 1";	  		
+		
+		$resultArr  = $this->findBySql($sql, $title);
+		return $resultArr;		
+  }	
+	
+	protected function getFieldsName($join = true)                                              {
+	  $sql  = "SELECT * FROM ";
+		$sql .= $this->tableName;
+		if($join == true) :
+		  $sql .=	" INNER JOIN ";
+		  $sql .=	$this->tableImage;
+			$sql .=	" ON ";
+		  $sql .= $this->tableImage.".productId=".$this->tableName.".id";	
+		  $sql .=	" INNER JOIN ";
+		  $sql .=	$this->innerTable;
+		  $sql .=	" ON ";
+		  $sql .= $this->innerTable.".id=".$this->tableName.".brandId";	
+		endif;
+		
+    $result = DB::$con2->query($sql);
+		$finfo  = $this->con->fetchFields($result);
+		
+		$dbFields = [];
 	  foreach($finfo as $val) {
-      $db_fields[]= $val->name;
+      $dbFields[]= $val->name;
     }
-				
-		// maybe change $sql without id and cat_id key and delete the below code
-		$arlen = count($db_fields);
-		unset($db_fields[$arlen-2]);//deletes id key in brand table
-		unset($db_fields[$arlen-3]);//deletes cat_id key in brand table
-		return $db_fields;
+		
+		return $dbFields;
 	}	
+	
 }
 
-$product = new Product();
+$product = new Product($database);

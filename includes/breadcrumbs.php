@@ -1,36 +1,34 @@
 <?php
+
 class Breadcrumbs {
 	
-	public static $url;
-	public static $base_url;
-	public static $links;	
-
-	function __construct($home = "home") {
-		self::$url      = $_SERVER['REQUEST_URI'];		
-    self::$base_url = ($_SERVER['HTTPS'] ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST'].'/';
-		self::get_links($home);
-	}
-	
-	private static function get_links($home) {
-		$parse_url                    = parse_url(self::$url, PHP_URL_PATH);	
-    $path_array                   = array_filter(explode('/', $parse_url));
-		$path_keys                    = array_keys($path_array);
-	  $last_key                     = end($path_keys);
-    self::$links[self::$base_url] = $home;
-		$crumb_add = "";
-    foreach ($path_array as $key => $crumb) :
-      $crumb = self::clean_url($crumb);
-        if ($key !== $last_key) :
-		      $crumb_add                              .= $crumb."/";
-          self::$links[self::$base_url.$crumb_add] = $crumb;
-        else :
-          self::$links[]                           = $crumb;
-			  endif;
+  public static function getLinks(string $home = "home") {
+	  $url     = $_SERVER['REQUEST_URI'];
+		
+//    $baseUrl = ($_SERVER['HTTPS'] ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST'].'/';
+		
+		/***delete on the webhost***/
+    $baseUrl = 'http'.'://'.$_SERVER['HTTP_HOST'].'/';
+		
+		$parseUrl        = parse_url($url, PHP_URL_PATH);	
+    $pathArray       = array_filter(explode('/', $parseUrl));			
+		$pathKeys        = array_keys($pathArray);
+	  $lastKey         = end($pathKeys);
+    $links[$baseUrl] = $home;
+    foreach ($pathArray as $key => $crumb) :
+      $crumb = self::cleanUrl($crumb);
+      if ($key !== $lastKey) :
+        $links[$baseUrl.$crumb."/"] = $crumb;
+      else :
+        $links[]                    = $crumb;
+			endif;
     endforeach;
+			return $links;
 	}	
 	
-	private static function clean_url($crumb) {
+	private static function cleanUrl(string $crumb):string {
 		$crumb = str_replace(['.php', '_'], ['', ' '], $crumb);
 		return $crumb;
-	}  
+	}
+  
 }

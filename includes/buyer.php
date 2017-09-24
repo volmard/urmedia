@@ -1,51 +1,61 @@
 <?php
 
-class Buyer extends DbObject {
+class Buyer extends dbObject {
 	
-	protected static $table_name  = "buyers";
-	protected static $db_fields;	
+	protected $tableName  = "buyers";
+	protected $dbFields;	
 	public $id;
-	public $name;
-	public $surname;
+	public $firstName;
+	public $lastName;
 	public $email;
 	public $phone;
 	public $adress;
-	public $ip;
-	public $order_id;
+//	public $ip;
+	public $orderId;
 	public $datetime;
 
-	function __construct() {
-		self::$db_fields = self::get_fields_name();
-    $this->init_attributes();	
+	public function __construct($db)                 {
+		$this->con                    = $db;
+		$this->dbFields      = [
+			                      'dbFields'     => $this->getFieldsName(false), 
+														'dbFieldsJoin' =>	$this->getFieldsName()
+		];
+    $this->initAttributes();	
 	}			
 	
-	public function init_attributes() {
+	public function initAttributes()          {
 		if(isset($_POST['order'])) {			
-			$this->datetime  = time();
-		  $this->order_id  = Order::save_order();
+			$this->datetime = time();			
+		  $this->orderId  = Order::saveOrder();
 		}		
 	}
 	
-	public static function find_buyers() {
-    global $database;    
-	  $sql          = "SELECT * FROM ";
-		$sql         .= self::$table_name;
-		$result_array = self::find_by_sql($sql);
-		return !empty($result_array) ? $result_array : false;
-}
+	public function fullName()                {
+		return $this->firstName . " " . $this->lastName;
+	}	
+	
+	public function findBuyers()              {   
+	  $sql       = "SELECT * FROM ";
+		$sql      .= $this->tableName;
+		
+		$resultArr = $this->findBySql($sql);
+		return $resultArr;
+  }
 
-  protected static function get_fields_name() {
-		global $database;
-	  $sql = "SELECT * FROM ";
-		$sql .= self::$table_name;
-    $result = $database->query($sql);
-		$finfo = $result->fetch_fields();
-		$db_fields=[];
+  protected function getFieldsName() {
+	  $sql      = "SELECT * FROM ";
+		$sql     .= $this->tableName;
+		
+    $result   = DB::$con2->query($sql);
+		$finfo    = $this->con->fetchFields($result);
+		
+		$dbFields = [];
 	  foreach($finfo as $val) {
-      $db_fields[]= $val->name;
+      $dbFields[] = $val->name;
     }
-		return $db_fields;
+		
+		return $dbFields;
 	}
 }
 
-$buyer = new Buyer();
+$buyer = new Buyer($database);

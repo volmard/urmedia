@@ -1,12 +1,16 @@
 <?php
 
+function placeholders($count = 0) {
+	return rtrim(str_repeat('?,', $count), ',');
+}
+
 function strip_zeros_from_date($marked_string="") {  
   $no_zeros = str_replace('*0', '', $marked_string); // first remove the marked zeros
   $cleaned_string = str_replace('*', '', $no_zeros); // then remove any remaining marks
   return $cleaned_string;
 }
 
-function clean_text($text="") {  
+function cleanText($text="") {  
   $no_slash     = str_replace("\'", "'", $text);
 	$text_cleaned = preg_replace('/\v+|\\\r\\\n/','<br>',$no_slash);
   return $text_cleaned;
@@ -19,12 +23,20 @@ function redirect_to($location = NULL) {
   }
 }
 
+function sanitizeInput($input) {
+	return strip_tags(trim($input));
+}
+
+function setIds()              {
+  $id = $_GET["pid"] ?? null;
+	$id = strtolower(sanitizeInput($id)); 
+  return $id;    
+}
+
 function output_message($message="") {
-  if (!empty($message)) { 
-    return "<p class=\"message\">{$message}</p>";
-  } else {
-    return "";
-  }
+  if (!empty($message))  
+    return "<p class=\"message\">{$message}</p>";  
+  return "";
 }
 
 function __autoload($class_name) {
@@ -41,8 +53,9 @@ function __autoload($class_name) {
 	}
 }
 
-function include_layout_template($template="") {
-	include(SITE_ROOT.DS.'public'.DS.'layouts'.DS.$template);
+function loadLayout($template = "") {
+//	include(SITE_ROOT.DS.'public'.DS.'layouts'.DS.$template.'.php');
+	include('../includes/layouts/'.$template);
 }
 
 function datetime_to_text($datetime="") {
@@ -50,14 +63,17 @@ function datetime_to_text($datetime="") {
   return strftime("%B %d, %Y at %I:%M %p", $unixdatetime);
 }
 
-function base_serialize($input, $method="encode") {
-	if ($method      == "encode") {
-		return $output =  base64_encode(serialize($input));
-	} elseif($method == "decode") {
-		return $output =  unserialize(base64_decode($input));
-	} else {
-		echo "wrong condition";
-	}
+function baseSerialize($input, $method = "encode") {	
+	switch($method) :
+	  case 'encode':
+	    return $output =  base64_encode(serialize($input));
+	    break;
+	  case 'decode':
+	    return $output =  unserialize(base64_decode($input));
+	    break;
+	  default:
+	    throw new Exception('Wrong method');
+	endswitch;
 }
 
 function load_class($class_name) {
@@ -74,7 +90,36 @@ function load($file_name) {
   }
 }
 
+function getSerializedData($data, &$descrKeys) {
+  $shortDescr = baseSerialize($data, "decode");
+  $descrKeys = array_keys($shortDescr);
+	return $shortDescr;
+}
+	
+function getIpAddress() {
+  $ipKeys = array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR');
+	
+  foreach ($ipKeys as $key) :
+    if (array_key_exists($key, $_SERVER)) :
+      foreach (explode(',', $_SERVER[$key]) as $ip) :
+        $ip = trim($ip);
+        $ip = ip2long($ip);
+        return $ip;
+      endforeach;
+    endif;
+  endforeach;//main
+	
+  return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : false;
+}
+
+
+
+
 //will be deleted
+
+
+
+
 
 
 
@@ -100,16 +145,7 @@ function load($file_name) {
       mysqli_close($connection);  
     }    
   }
-  function set_ids() {
-    if (isset($_GET["pid"])) {      
-      $id = strtolower(strip_tags(trim($_GET['pid'])));    
-    } elseif (isset($_GET["search"])) {
-      $id = "search";
-    } else {
-      $id = "";    
-    }
-    return $id;    
-  }
+
   function add_body_class() {
       if (set_ids()) {
         $id=set_ids();  
@@ -181,20 +217,7 @@ function load($file_name) {
 
 /*testing*/
 
-  function get_ip_address() {
-    $ip_keys = array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR');
-    foreach ($ip_keys as $key) {
-        if (array_key_exists($key, $_SERVER) === true) {
-            foreach (explode(',', $_SERVER[$key]) as $ip) {
-                // trim for safety measures
-                $ip = trim($ip);
-                $ip = ip2long($ip);
-                return $ip;
-            }
-        }
-    }
-    return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : false;
-}
+
 
    
 /**
@@ -207,3 +230,5 @@ function load($file_name) {
     }
     return true;
 }
+
+

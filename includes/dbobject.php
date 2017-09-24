@@ -1,10 +1,17 @@
 <?php
+require_once("database.php");
 
-abstract class DbObject {
+// @check function instantiate($record), cleanText($value) row; is't database issue or text?
+
+//abstract 
+
+class dbObject {
 	
-	public static $upload_dir       = 'images/products';
-	public static $errors           = [];	
-	protected static $upload_errors = [
+	protected $con;	
+	protected $multiArr     = [];
+	public    $uploadDir    = 'images/products';	
+	public   static $errors = [];	
+	protected $uploadErrors = [
 	  UPLOAD_ERR_OK 				=> "No errors.",
 	  UPLOAD_ERR_INI_SIZE  	=> "Larger than upload_max_filesize.",
     UPLOAD_ERR_FORM_SIZE 	=> "Larger than form MAX_FILE_SIZE.",
@@ -15,308 +22,294 @@ abstract class DbObject {
     UPLOAD_ERR_EXTENSION 	=> "File upload stopped by extension."
   ];	
 	
-	public static function find_all($rand = 0, $lim = 0) {
-    $sql  = "SELECT * FROM ";
-    $sql .= static::$table_name;
-    if ($rand !== 0) {
-       $sql .= " ORDER BY RAND()";        
-    }
-    if ($lim !== 0) {
-       $sql .= " LIMIT 0, {$lim}";        
-    }
-		return static::find_by_sql($sql);
-  }
-	
-	public static function find_by_id($id = 0) {
-    global $database;    
-    $sql  = "SELECT * FROM ";
-    $sql .= static::$table_name;
-    $sql .= " WHERE id = {$id} ";
-    $sql .= "LIMIT 1";
-    $result_array = static::find_by_sql($sql);
-		return !empty($result_array) ? array_shift($result_array) : false;    
-  }
-	
-	public static function find_by_id_prepared($id = 0) {
-		  global $database;
-      $sql  = "SELECT * FROM ";
-      $sql .= static::$table_name;
-      $sql .= " WHERE id = ? ";
-      $sql .= "LIMIT 1";
-			$result_array = static::find_by_sql_prepared($sql, $id);
-		  return !empty($result_array) ? array_shift($result_array) : false;
-  }
-	
-	public static function find_by_sql($sql = "") {
-    global $database;  
-    $result_set   = $database->query($sql);
-		$object_array = [];		
-		while($row = $result_set->fetch_array()) {
-      $object_array[] = static::instantiate($row);			
-    }
-		return $object_array;
-  }
-	
-	public static function find_by_sql_prepared ($sql = "", $id = 0) {
-    global $database;	
-		$id         = !is_array($id) ? (array)$id : $id;
-    $stmt       = $database->prepare($sql);
-		$params     = []; 
-		foreach ($id as &$value) { 
-      $params[] = &$value;
-    }
-//		expected error, because mysql tried to handle recognazing $id type by itself
-//		marked with * means improvements
-//		$types[]    = str_repeat('i', count($params));
-		
-		$new          = new static();//*
-		$types_string = implode('', $new->check_var_type($id));//*
-		$types        = (array)$types_string;//*
-    $values       = array_merge($types, $params);
-    call_user_func_array(array($stmt, 'bind_param'), $values); 
-    $stmt->execute();
-    $meta         = $stmt->result_metadata();
-    while ($field = $meta->fetch_field()) { 
-      $parameters[] = &$row[$field->name]; 
-    } 
-    call_user_func_array(array($stmt, 'bind_result'), $parameters);
-    while ($stmt->fetch()) {
-		  $object_array[] = static::instantiate($row);
-    }
-		$stmt->close();	
-		return $object_array;
-  }
-	
-	/*not-styled function*/
-	public static function count_all($id=0) {
-		global $database;
-		$query      = "SELECT COUNT(*) FROM ".static::$table_name;
-		if($id) {
-			$query    .= " INNER JOIN brands ON brands.id=products.brand_id WHERE brand_title='$id'";			
-		}
-		$result_set = $database->query($query);
-		$row        = $result_set->fetch_array();
-		return array_shift($row);
-	}
-	
-	private static function instantiate($record) {
-		$object = new static;		
-		foreach($record as $attribute => $value) {
-			if($object->has_attribute($attribute)) {
-				$object->$attribute = clean_text($value);
-			}						
-		}		
+	public    function instantiate($record)           {
+		$object       = new static($this->con);
+		foreach($record as $attribute => $value) :
+			if($object->hasAttribute($attribute)) {
+				$value              = cleanText($value);
+			  $object->$attribute = $value;
+			}
+		endforeach;
 		return $object;
 	}
 	
-  private function has_attribute($attribute) {
-		$object_vars = $this->attributes();
-		return $object_vars;//temporary solution
-	  return array_key_exists($attribute, $object_vars);
+	private   function hasAttribute($attribute)       {
+//		$objectVars = get_object_vars($this);
+		$objectVars = $this->attributes();
+		return array_key_exists($attribute, $objectVars);
 	}
 	
-	protected function attributes() {
-	  $attributes = [];
-		$object_vars = get_object_vars($this);	 foreach(static::$db_fields as $field) {
-	    if(property_exists($this, $field)) {
-	      $attributes[$field] = $this->$field;
-	    }
-	  }
+	protected function attributes(bool $join = false) {
+		$attributes = [];	
+		$dbFields   = $this->dbFields['dbFieldsJoin'];
+		if($join) 
+			$dbFields = $this->dbFields['dbFields'];
+		
+		foreach($dbFields as $field) :
+		  if(property_exists($this, $field))
+				$attributes[$field] = $this->$field;
+		endforeach;
 		return $attributes;
 	}
- 
-	protected function sanitized_attributes() {
-		global $database;
-		$clean_attributes = [];
-		foreach($this->attributes() as $key => $value):
-			if (!is_numeric($value)) {
-				$clean_attributes[$key] = $database->escape_value($value);
-			} else {
-				$clean_attributes[$key] = $value;
-			}			
-		endforeach;
-		return $clean_attributes;
+	
+	private   function sanitizedAttributes()          {
+		$cleanAttributes = [];
+		foreach($this->attributes(true) as $key => $value)
+		  $cleanAttributes[$key] = $this->con->escapeValue($value);
+		return $cleanAttributes;
+	}	
+	
+	/*	
+	  @ function findBySqlPrepare
+		@ Using checkVarType because of expected error, mysql try to handle recognizing $id type		
+	*/	
+	
+	private static function updateAttr($params, $attr, $id) {		
+		$attrPairs    = [];
+	  foreach($attr as $key => $value)
+		 $attrPairs[] = "{$key} = ?";
+		$types[]      = implode('', self::checkVarType($attr)) . "i";
+		$values       = array_merge($types, $params);
+		$values[]     = &$id;		
+		$arr          = [$attr, $attrPairs, $values];
+		return $arr;
 	}
 	
-	public function save($input = 0) {
-		return isset($this->id) ? $this->update() : $this->create_prepared();
+  private function createAttr($params, $attr)             {		 
+		$types         = [];
+		$placeholders  = placeholders(count($attr));
+		$types[]       = implode('', self::checkVarType($attr));
+		
+		if(isset($this->attrArr)) :
+			$values = [];
+			foreach($params as $param) 
+		    $values[]        = array_merge($types, $param);
+		else :
+			$values        = array_merge($types, $params);
+		endif;				
+			
+		$arr           = [$attr, $placeholders, $values];
+		return $arr;
 	}
 	
-	public function create() {
-		global $database;
-		$attributes = $this->sanitized_attributes();
+	private	function prepareSaveValues()                    {
+		// @init input
+		$attr      = $this->attributes(true);		
+		$id        = $this->id;			
+		$params    = [];
+		array_shift($attr); // @deletes id
+		
+		// @case for multi queries
+		if(isset($this->attrArr)) :
+		  foreach ($this->attrArr as &$arr) :
+		  	$param = [];
+		    foreach ($arr as &$value)
+          $param[] = &$value;
+		  	$params[] = $param;		
+		  endforeach;	
+		// @case for single query
+		else :
+		  foreach ($attr as &$value) 
+        $params[] = &$value;	
+		endif;
+
+		if($id) :	
+      return self::updateAttr($params, $attr, $id);
+		else :
+      return self::createAttr($params, $attr);
+		endif;
+	}		
+	
+	private static function prepareSelectValues($id)        {
+		$id          = !is_array($id) ? (array)$id : $id;
+		$params      = [];		
+		foreach($id as &$value)
+			$params[]  = &$value;		
+		$typeString  = implode('', self::checkVarType($id));		
+		$types       = (array)$typeString;
+		$values      = array_merge($types, $params);
+		return $values;
+	}
+	
+	private function prepareValues($id = 0)                 {
+		if($id)
+			return self::prepareSelectValues($id);
+		return $this->prepareSaveValues();
+	}
+	
+	private static function checkVarType($array)            {
+		$checkedArray       = [];
+		
+		foreach ($array as $val) :
+			if (is_string($val)) :
+				$checkedArray[] = 's';
+			elseif(is_numeric($val)) :
+				$checkedArray[] = 'i';
+			endif; 
+	  endforeach;
+		
+		return $checkedArray;
+	}
+	
+	private function findBySqlPrepare($sql, $id)            {
+		// @init input
+		$objectArray = [];
+		$parameters  = [];
+		$values      = self::prepareValues($id);
+		
+		// @prepare stmt
+		$stmt        = $this->con->prepared($sql);
+		
+		// @bind_param and execute stmt
+		call_user_func_array([$stmt, 'bind_param'], $values);
+		$this->con->stmtExecute($stmt);	
+		
+		// @bind_result stmt
+		$meta   = $this->con->resultMetadata($stmt);
+		while($field = $this->con->fetchField($meta))	
+			$parameters[] = &$row[$field->name];
+		call_user_func_array([$stmt, 'bind_result'], $parameters);	
+		
+		// @fetch stmt
+		while($this->con->stmtFetch($stmt))
+		  $objectArray[] = $this->instantiate($row, true);		
+		
+		// @close stmt
+		$this->con->closeStmt($stmt);
+		return !empty($objectArray) ? $objectArray : false;		
+	}
+	
+	private function findBySqlQuery($sql)                   {
+		$resultSet   = $this->con->query($sql);
+		$objectArray = [];		
+		while($row = $this->con->fetchArray($resultSet)) :		
+			$objectArray[] = $this->instantiate($row);
+	  endwhile;		 
+		return !empty($objectArray) ? $objectArray : false;
+	}
+	
+	public function findBySql($sql = "", $id = 0)           {
+		if($id)
+		  return $this->findBySqlPrepare($sql, $id);
+		return $this->findBySqlQuery($sql);		
+	}	
+	
+	public function findAll($rand = 0, $lim = 0)            {
+		$sql  = "SELECT * FROM ";
+		$sql .= $this->tableName;
+		if($rand !== 0)
+			$sql .= " ORDER BY RAND()";
+		if($lim !== 0)
+			$sql .= " LIMIT 0, {$lim}";
+		
+		$resultArray = $this->findBySql($sql);
+		return $resultArray;
+	}	
+
+	/*
+	  This function works in two ways:
+		@1 if $id !== 0 the function will call ordinary sql query;
+	  @2 if $id = '?' and $id2 !== 0 the function will call prepared statement
+	*/
+	public function findByid($id = 0, $id2 = 0)             {
+		$sql  = "SELECT * FROM ";
+		$sql .= $this->tableName;		
+		$sql .= " WHERE id = {$id} ";
+		$sql .= "LIMIT 1";
+		
+		$resultArray = $this->findBySql($sql, $id2);
+		return !empty($resultArray) ? array_shift($resultArray) : false;		
+	}		
+		
+	/*@for testing, will be deleted in the future*/
+	public function createByQuery()                         {
+		$attributes = $this->sanitizedAttributes();
 		array_shift($attributes); //deletes id
-		array_pop($attributes); //deletes brand_title
-		$sql  = "INSERT INTO ".static::$table_name." (";
+		
+		$sql  = "INSERT INTO ";
+		$sql .= $this->tableName;
+		$sql .= " (";
 		$sql .= implode(", ", array_keys($attributes));
 		$sql .= ") VALUES ('";
     $sql .= implode("', '", array_values($attributes));
 		$sql .= "')";
-		if($database->query($sql)) {
-			$this->id = $database->insert_id();
-			return true;
-		} else {
-			return false;
-		}
-	}
-	
-	private function check_var_type($array) {
-		$checked_array       = [];
-		foreach ($array as $val) {
-			if (is_string($val)) {
-				$checked_array[] = 's';
-			} elseif(is_numeric($val)) {
-				$checked_array[] = 'i';
-			} 
-	  }
-		return $checked_array;
-	}
-	
-	public function init_prepared_stmt() {
-		$attributes = $this->sanitized_attributes();
-		array_shift($attributes); //deletes id
-//  temporary solution, unfortunately not flexible
-		if(static::$table_name == "products") {
-			array_pop($attributes); //deletes brand_title
-		}
-		if($this->id && !$this->multi_images) {		
-//&& !$this->multi_images	tmp solution for multi image loading
-			$attributes_pairs    = [];
-		  foreach($attributes as $key => $value) {
-			  $attribute_pairs[] = "{$key} = ?";
-		  }
-			$array        = ["attributes"=>$attributes, "values"=>$attribute_pairs];
-		} else {
-		  $placeholders = array_fill(0, count($attributes), '?');
-			$array        = ["attributes"=>$attributes, "values"=>$placeholders];
-		}	
-		return $array;
-	}
-	
-	public function create_prepared() {
-	  global $database;
-		$array         = $this->init_prepared_stmt();
-		$attributes    = $array["attributes"];
-		$placeholders  = $array["values"];		
-		$sql           = "INSERT INTO ".static::$table_name." (";
-		$sql          .= implode(", ", array_keys($attributes));
-		$sql          .= ") VALUES (";
-    $sql          .= implode(", ", $placeholders);
-		$sql          .= ")";
-//		echo $sql;
-		$affected_rows = $this->prepared_stmt($sql, $attributes);
-		if ($affected_rows == 1) { 
-	    $this->id    = $database->insert_id;
-//	  	return true;
-	  } else { 
-	  	echo "it did not work...";
-	  	return false;
-	  }
-  }
 		
-	public function prepared_stmt($sql, $attributes) {
-		global $database;
-		$stmt         = $database->prepare($sql);
-		$database->confirm_query($stmt);
-    $params       = []; 
-    foreach ($attributes as &$value) { 
-      $params[]   = &$value;
-    }
-    if($this->id && !$this->multi_images) {
-//&& !$this->multi_images	tmp solution for multi image loading
-			$id           = $database->escape_value($this->id);
-      $types_string = implode('', $this->check_var_type($attributes)) . "i";
-		  $types        = (array)$types_string;
-		  $values       = array_merge($types, $params);
-      $values[]     = &$id;
-    } else {      	
-      $types[]      = implode('', $this->check_var_type($attributes));
-      $values       = array_merge($types, $params);
-    }
-		
-//		$types[]      = implode('', $this->check_var_type($attributes));
-//      $values       = array_merge($types, $params);
-//		var_dump($types);
-    call_user_func_array(array($stmt, 'bind_param'), $values); 
-    $stmt->execute();
-		$affected_rows  = $stmt->affected_rows;
-		$stmt->close();
-		return $affected_rows;    
-	}
-	
-	public function update() {
-		global $database;
-		$attributes = $this->sanitized_attributes();
-		array_shift($attributes); //deletes id
-		array_pop($attributes); //deletes brand_title
-		$attributes_pairs = [];
-		foreach($attributes as $key => $value) {
-			$attribute_pairs[] = "{$key}='{$value}'";
-		}
-		$sql  = "UPDATE ".static::$table_name." SET ";
-    $sql .= join(", ", $attribute_pairs);
-		$sql .= " WHERE id=". $database->escape_value($this->id);
-		$sql .= " LIMIT 1";
-		$database->query($sql);
-		return ($database->affected_rows() == 1) ? true : false;
-	}
-	
-	public function update_prepared() {
-		global $database;
-		$array           = $this->init_prepared_stmt();
-		$attributes      = $array["attributes"];
-		$attribute_pairs = $array["values"];		
-    $sql             = "UPDATE ".static::$table_name." SET ";
-    $sql            .= join(", ", $attribute_pairs);
-		$sql            .= " WHERE id = ?";
-		$sql            .= " LIMIT 1";
-		$affected_rows   = $this->prepared_stmt($sql, $attributes);
-		if ($affected_rows == 1) {
-	  	return true;
-	  } else { 
-	  	echo "it did not work...";
-	  	return false;
-	  }
-	}
-	
-	public function delete() {
-		global $database;
-		$sql  = "DELETE FROM ".static::$table_name;
-		$sql .= " WHERE id=". $database->escape_value($this->id);
-		$sql .= " LIMIT 1";
-		$database->query($sql);
-//		echo $database->affected_rows();
-		return ($database->affected_rows() == 1) ? true : false;
-	}
-	
-	public function delete_prepared() {
-		global $database;
-    $id   = $database->escape_value($this->id);
-		$sql  = "DELETE FROM ".static::$table_name;
-		$sql .= " WHERE id = ? ";
-		$sql .= " LIMIT 1";  
-    $stmt = $database->prepare($sql);
-	  $stmt->bind_param("i", $id);
-    $stmt->execute();     
-		$affected_rows = $stmt->affected_rows;
-		$stmt->close();
-		if ($affected_rows == 1) {
-			$this->reset_id();//will be deleted
+		$this->con->query($sql);
+		$affectedRows = $this->con->affectedRows();
+		if($affectedRows == 1) {
+			$this->id = $this->con->insertId();//#conflict with multi queries
 			return true;
-		} else {
-			return false;
-		}		
-//		return ($database->affected_rows == 1) ? true : false;
+		} 
+		return false;
 	}
 	
-	public function reset_id() {		
-	  global $database;
-		$sql  = "SET @count = 0;";
-		$sql .= "UPDATE products SET products.id = @count:= @count + 1;";
-		$sql .= "ALTER TABLE products AUTO_INCREMENT = 1;";
-    $database->multi_query($sql);		
-		return true;
+	public function runStmt($sql, $values)                  {
+		// @prepare stmt
+		if(isset($this->attrArr)) 
+		  $this->con->setAutoCommit();		
+		$stmt = $this->con->prepared($sql);
+		
+		// @bind_param and execute stmt
+		if(isset($this->attrArr)) :
+		  foreach($values as $value) {
+		    call_user_func_array(array($stmt, 'bind_param'), $value); 
+        $this->con->stmtExecute($stmt);	
+      }
+		else :
+			call_user_func_array(array($stmt, 'bind_param'), $values); 
+      $this->con->stmtExecute($stmt);	
+		endif;
+		
+		$affectedRows = $this->con->affectedRows();
+		
+		// @close stmt		
+		if(isset($this->attrArr)) 
+		  $this->con->setCommit();		
+		$this->con->closeStmt($stmt);
+		
+		return $affectedRows;    
+	}
+
+  public function create()                                {
+    [$attr, $placeholders, $values] = $this->prepareValues();
+	  $sql           = "INSERT INTO ";
+	  $sql          .= $this->tableName;
+	  $sql          .= " (";
+	  $sql          .= implode(", ", array_keys($attr));
+	  $sql          .= ") VALUES (";
+    $sql          .= $placeholders;
+	  $sql          .= ")";	      
+    $affectedRows  = $this->runStmt($sql, $values);	
+      
+    if ($affectedRows == 1) : 
+	    $this->id    = $this->con->insertId();
+	    return true;
+	  endif;		
+	  return false;
   }
 	
-  abstract protected static function get_fields_name();	
+	//	public function update() {}		
+		
+	// @ $input is temporary used to avoid conflict with the same product class function
+	public function save($input = 0)                        {
+		return isset($this->id) ? $this->update() : $this->create();
+	}
+	
+//	public function delete()                                      {}
+		
+	public function countAll($id=0)                         {		
+		$sql       = "SELECT COUNT(*) FROM ".$this->tableName;
+		if($id) 
+			$sql    .= " INNER JOIN brands ON brands.id=products.brandId WHERE brandTitle='$id'";
+		
+		$resultSet = $this->con->query($sql);
+		$row       = $this->con->fetchArray($resultSet);
+		
+		return array_shift($row);
+	}
+
+			
+//	abstract 
+//		protected static function getFieldsName();
+	
 }

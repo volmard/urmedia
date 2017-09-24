@@ -2,61 +2,73 @@
 
 class Session {
 	
-	private $logged_in = false;
-	public $user_id;
-	public $message;
+  private $loggedIn = false;
+	public  $userId;
+	public  $userLogin;
+	public  $message;
 	
 	function __construct() {
 		session_start();
-		$this->check_message();
-		$this->check_login();
+		$this->userActivity();
+		$this->checkMessage();
+		$this->checkLogin();		
 	}
 	
-	public function is_logged_in() {
-		return $this->logged_in;
+	public function isLoggedIn() {
+		return $this->loggedIn;
 	}
 	
 	public function login($user) {
-		if($user) {
-			$this->user_id   = $_SESSION["user_id"] = $user->id;
-			$this->logged_in = true;
-		}
+		if($user) :
+			$this->userId    = $_SESSION["userId"]    = $user->id;
+		  $this->userLogin = $_SESSION["userLogin"] = $user->login;
+			$this->loggedIn  = true;
+		endif;
 	}
 	
 	public function logout() {
-		unset($_SESSION["user_id"]);
-		unset($this->user_id);
-		$this->logged_in = false;
+		unset($_SESSION["userId"], $_SESSION["userLogin"]);
+		unset($this->userId);
+		$this->loggedIn = false;
 	}
 	
-	public function message($msg="") {
-		if(!empty($msg)) {
-			$_SESSION['message'] = $msg;
-			
-		} else {
+	public function message($msg = "") {
+		if(!empty($msg)) :
+			$_SESSION['message'] = $msg;			
+		else :
 			return $this->message;
-		}
+		endif;
 	}
 	
-	private function check_login() {
-		if(isset($_SESSION["user_id"])) {
-			$this->user_id   = $_SESSION["user_id"];
-			$this->logged_in = true;
-		} else {
-			unset($this->user_id);
-			$this->logged_in = false;
-		}
+	private function checkLogin() {
+		if(isset($_SESSION["userId"])) :
+			$this->userId    = $_SESSION["userId"];
+		  $this->userLogin = $_SESSION["userLogin"];
+			$this->loggedIn  = true;
+		else :
+			unset($this->userId);
+			$this->loggedIn = false;
+		endif;
 	}
 	
-	private function check_message() {
-		if(isset($_SESSION["message"])) {
+	private function checkMessage() {
+		if(isset($_SESSION["message"])) :
 			$this->message = $_SESSION["message"];
 			unset($_SESSION["message"]);
-		} else {
+		else :
 			$this->message = "";
-		}
+		endif;
 	}
-}
-
+	
+	private function userActivity($time = 600) {
+	  if(isset($_SESSION['lastActivity']) && (time() - $_SESSION['lastActivity'] > $time)) :
+//      session_unset();
+//      session_destroy();  
+		  $this->logout();
+    endif;
+    $_SESSION['lastActivity'] = time();
+	}
+	}
+	
 $session = new Session();
 $message = $session->message;

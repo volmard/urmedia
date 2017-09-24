@@ -1,80 +1,93 @@
 <?php
 require_once("initialize.php");
+
 class Order extends DbObject {
 	
-	protected static $table_name    = "orders";
-	protected static $inner_table   = "products";
-	protected static $inner_table_2 = "brands";
-	protected static $db_fields;	
+	protected $tableName   = "orders";
+	protected $innerTable  = "products";
+	protected $innerTable2 = "brands";
+	protected $dbFields;	
 	public $id;
-	public $prod_id;
+	public $prodId;
 	public $quantity;
-	public $order_id;
+	public $orderId;
+	public $title;
+	public $price;
+	private  $multi         = 1;
 
-	function __construct() {
-		self::$db_fields = self::get_fields_name();
-	}			
+	public function __construct($db)       {
+		$this->con         = $db;
+		$this->dbFields      = [
+			                      'dbFields'     => $this->getFieldsName(false), 
+														'dbFieldsJoin' =>	$this->getFieldsName()
+		];
+	}		
 
-	public static function save_order() {
-		global $database;
-    $products          = Cart::my_cart();
-		foreach($products as $item) {
-			$order           = new self();
-			$order->prod_id  = $item->id;
+	public static function saveOrder()               {
+    $products         = Cart::myCart();
+		$order = new self(static::$con);
+		foreach($products as $item) :
+			$order->prodId   = $item->id;
 	    $order->quantity = Cart::$cart[$item->id];
-	    $order->order_id = Cart::$cart['orderid'];
-      $order->create_prepared();
-    }		
+	    $order->orderId  = Cart::$cart['orderId'];
+		  
+      $order->createPrepared();
+    endforeach;		
     setcookie("cart", "", 1);
-		return $order->order_id;
+		return $order->orderId;
 	}
  
-  protected static function get_fields_name() {
-		global $database;
-	  $sql = "SELECT * FROM ";
-		$sql .= self::$table_name;
-    $result = $database->query($sql);
-		$finfo = $result->fetch_fields();
-		$db_fields=[];
+  protected function getFieldsName($join = true) {
+	  $sql      = "SELECT * FROM ";
+		$sql     .= $this->tableName;
+		if($join == true) :
+		  $sql .=	" INNER JOIN ";
+		  $sql .=	$this->innerTable;
+		  $sql .=	" ON ";
+		  $sql .= $this->innerTable.".id=".$this->tableName.".prodId";	
+			$sql .=	" INNER JOIN ";
+		  $sql .=	$this->innerTable2;
+		  $sql .=	" ON ";
+		  $sql .= $this->innerTable.".brandid=".$this->innerTable2.".Id";	
+		endif;
+    $result   = DB::$con2->query($sql);
+		$finfo    = $this->con->fetchFields($result);
+		
+		$dbFields = [];
 	  foreach($finfo as $val) {
-      $db_fields[]= $val->name;
+      $dbFields[] = $val->name;
     }
-		return $db_fields;
+		return $dbFields;
 	}
 	
-	public static function find_orders($orderid) {//WIP
-    global $database;
-//    $sql = "SELECT title, image, brand_title, price, orders.quantity, order_id
-//              FROM products              
-//              INNER JOIN brands
-//              ON brands.id=products.brand_id
-//              INNER JOIN orders
-//              ON orders.prod_id=products.id and orders.order_id = ?";
+	public function findOrders($orderid)      {
 		$sql  = "SELECT "
-		        .self::$inner_table.".title,"
-//						.self::$inner_table.".image,"
-						.self::$inner_table.".price,"
-						.self::$table_name.".quantity,"
-						.self::$table_name.".order_id,"
-						.self::$inner_table_2.".brand_title
+		        .$this->innerTable.".title,"
+//						.$this->innerTable.".image,"
+						.$this->innerTable.".price,"
+						.$this->tableName.".quantity,"
+						.$this->tableName.".orderId,"
+						.$this->innerTable2.".brandTitle
 						FROM ";
-		$sql .= self::$inner_table;
+		$sql .= $this->innerTable;
 		$sql .=	" INNER JOIN ";
-		$sql .=	self::$inner_table_2;
+		$sql .=	$this->innerTable2;
 		$sql .=	" ON ";
-		$sql .= self::$inner_table_2.".id=".self::$inner_table.".brand_id";
+		$sql .= $this->innerTable2.".id=".$this->innerTable.".brandId";
 	  $sql .=	" INNER JOIN ";
-		$sql .=	self::$table_name;
+		$sql .=	$this->tableName;
 		$sql .=	" ON ";
-		$sql .= self::$table_name.".prod_id=".self::$inner_table.".id";
+		$sql .= $this->tableName.".prodId=".$this->innerTable.".id";
 	  $sql .=	" AND ";
-		$sql .= self::$table_name.".order_id=?";
-    $result_array = self::find_by_sql_prepared($sql, $orderid);
-		return !empty($result_array) ? $result_array : false;  
+		$sql .= $this->tableName.".orderId = ?";
+		
+    $resultArr = $this->findBySqlPrepared($sql, $orderid);
+		return $resultArr;  
   }
 
 }
 
-$order = new Order();
-//$orders = Order::find_orders("584043de8f513");
-//var_dump($orders);
+$order = new Order($database);
+//$orders = $order->findOrders("58d8eb1de6449");
+//echo "<pre>";
+//var_dump($orders[0]);

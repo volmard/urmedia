@@ -2,48 +2,51 @@
 
 class Pagination {
 	
-	public $current_page;
-	public $per_page;
-	public $total_count;
+	public $currentPage;
+	public $perPage;
+	public $totalCount;
 	
-	public function __construct($page=1, $per_page=20, $total_count=0) {
-		$this->current_page = (int)$page;
-		$this->per_page = (int)$per_page;
-		$this->total_count = (int)$total_count;
+	public function __construct($perPage = 20, $totalCount = 0) {
+		$this->currentPage = (int) ($_GET['page'] ?? 1);
+		$this->perPage     = (int) $perPage;
+		$this->totalCount  = (int) $totalCount;
 	}
 	
-	public function offset() {
-		return ($this->current_page - 1) * $this->per_page;
+	public function offset()      {
+		return ($this->currentPage - 1) * $this->perPage;
 	}
 	
-	public function total_pages() {
-		return ceil($this->total_count/$this->per_page);
+	public function totalPages()  {
+		return ceil($this->totalCount/$this->perPage);
 	}
 	
-	public function previous_page() {
-		return $this->current_page - 1;
+	private function prevPage()   {
+		return $this->currentPage - 1;
 	}
 	
-	public function next_page() {
-		return $this->current_page + 1;
+	private function nextPage()   {
+		return $this->currentPage + 1;
 	}
 	
-	public function has_previous_page() {
-		return $this->previous_page() >= 1 ? true : false;
+	public function hasPrevPage() {
+		return $this->prevPage() >= 1 ? $this->prevPage() : false;
 	}
 	
-	public function has_next_page() {
-		return $this->next_page() <= $this->total_pages() ? true : false;
+	public function hasNextPage() {
+		return $this->nextPage() <= $this->totalPages() ? $this->nextPage() : false;
 	}
 	
-	//i dont like the html code in php
-	private function previous_page_item() {
-		global $self;
-		$previous_page = $this->has_previous_page();
-		if($previous_page) {
-			$result  = "<li class=\"paginator__item\">\n\t\t\t";			
-			$result .= "<a class=\"paginator__link\" href=\"{$newself}?page="
-		             .$this->previous_page().
+	
+	
+	
+	// @html w/ php release
+	private static function prevPageItem()                      {
+		global $newself;
+		$prevPage = self::hasPrevPage();
+		if($prevPage) {
+			$result  = "<li class=\"paginator__item\">\n\t\t\t";
+		  $result .= "<a class=\"paginator__link\" href=\"{$newself}&page="
+		             .self::prevPage().
 		             "\">prev</a>\n\t\t";
 		  $result .= "</li>\n\t\t";
 		  echo $result;
@@ -55,14 +58,15 @@ class Pagination {
 		}
 	}
 	
-	private function next_page_item() {
-		global $self;
-		$next_page = $this->has_next_page();
-		if($next_page) {
-			$result  = "<li class=\"paginator__item\">\n\t\t\t";		  
-			$result .= "<a class=\"paginator__link\" href=\"{$newself}?page="
-		              .$this->next_page().
-				              "\">next</a>\n\t\t";			
+	private static function nextPageItem()                      {
+		global $newself;
+		$nextPage = self::hasNextPage();
+		if($nextPage) {
+			$result  = "<li class=\"paginator__item\">\n\t\t\t";
+			$result .= "<a class=\"paginator__link\" href=\"{$newself}&page="
+		              .self::nextPage().
+				              "\">next</a>\n\t\t";
+			
 		   $result .= "</li>\n\t\t";
 		  echo $result;
 		} else {
@@ -73,39 +77,39 @@ class Pagination {
 		}
 	}
 	
-	private function pages($i=1, $page=1) {
-		global $self;
+	private static function pages($i=1, $page=1)                {
+		global $newself;
 		if($i == $page) {
-			$result  = "<li class=\"paginator__item  paginator__item--current\">\n\t\t\t";			
-			$result .= "<a class=\"paginator__link\" href=\"{$newself}?page={$i}\">{$i}</a>\n\t\t";			
+			$result  = "<li class=\"paginator__item  paginator__item--current\">\n\t\t\t";
+			$result .= "<a class=\"paginator__link\" href=\"{$newself}&page={$i}\">{$i}</a>\n\t\t";			
 			$result .= "</li>\n\t\t";
 	 	} else {
-	 		$result  = "<li class=\"paginator__item\">\n\t\t\t";			
-			$result .= "<a class=\"paginator__link\" href=\"{$newself}?page={$i}\">{$i}</a>\n\t\t";
+	 		$result  = "<li class=\"paginator__item\">\n\t\t\t";
+			$result .= "<a class=\"paginator__link\" href=\"{$newself}&page={$i}\">{$i}</a>\n\t\t";			
 			$result .= "</li>\n\t\t";
 	 	} 
 		echo $result;
 	}
 	
-	private function add_pagination_links($visible_links=3) {
-		for($i = $this->current_page-$visible_links; $i <= $this->current_page; $i++) {
+	private static function addPaginationLinks($visibleLinks=3) {
+		for($i = self::$currentPage-$visibleLinks; $i <= self::$currentPage; $i++) {
 			if($i > 0) {
-		    $this->pages($i, $this->current_page);
+		    self::pages($i, self::$currentPage);
 			}
 	  }			 
-		for($i = $this->current_page+1; $i <= $this->total_pages(); $i++){
-		  $this->pages($i, $this->current_page);
-		  if($i >= $this->current_page+$visible_links){
+		for($i = self::$currentPage+1; $i <= self::totalPages(); $i++){
+		  self::pages($i, self::$currentPage);
+		  if($i >= self::$currentPage+$visibleLinks){
 		  	break;
 		  }
 	  } 
 	}
 	
-	public function add_pagination($visible_links=3) {
-		if($this->total_pages() > 1) {			 
-			 $this->previous_page_item();
-			 $this->add_pagination_links();			 
-			 $this->next_page_item();			 
+	public static function addPagination()                      {
+		if(self::totalPages() > 1) {			 
+			 self::prevPageItem();
+			 self::addPaginationLinks();			 
+			 self::nextPageItem();			 
 		 }
 	}
 	

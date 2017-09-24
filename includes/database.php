@@ -1,75 +1,106 @@
 <?php
 
-class MySQLDatabase extends mysqli {
+require_once("config.php");
+
+class DB extends mysqli {
 	
-	private $connection;
+	public static $con2;
 	
-	function __construct() {
-		$this->open_connection();
-		parent::__construct(DB_SERVER, DB_USER, DB_PASS, DB_NAME);
+	public function __construct() 								 {		
+		parent::__construct(DB_SERVER, DB_USER, DB_PASS, DB_NAME);		
+		$this->checkConnection();
 	}
 	
-	public function open_connection() {
-	  $this->connection = mysqli_connect(DB_SERVER, DB_USER, DB_PASS, DB_NAME);
-    if (mysqli_connect_errno()) {
-      die("Database connection failed " .
-           mysqli_connect_error() . 
-           " (" . mysqli_connect_errno() . ")"
-      );  
-    }
+	private function checkConnection()             {
+		if ($this->connect_error)
+		  die("Database connecion failed " . 
+					$this->connect_error . " (" . 
+					$this->connect_errno . ")"
+			);
 	}
 	
-	public function close_connection() {
-		if(isset($this->connection)) {
-			mysqli_close($this->connection);
-			unset($this->connection);
-		}
+	public  function closeConnection()             {
+		$this->close();
 	}
 	
-	public function query($sql) {
-		$result = mysqli_query($this->connection, $sql);
-//		$result = $this->query($sql);
-		$this->confirm_query($result);
+	public  function query($sql)                   {
+		$result = parent::query($sql);	
+		$this->confirmQuery($result);
 		return $result;
 	}
+	
+	public  function prepared($sql)                {
+		$result = $this->prepare($sql);
+		$this->confirmQuery($result);
+		return $result;
+	}
+	
+	public  function confirmQuery($result)         {
+		if(!$result) :
+			die("Database query failed " . 
+					$this->connect_error . " (" . 
+					$this->connect_errno . ")"
+			);
+		exit;
+		endif;		
+	}
+	
+	public  function escapeValue($string)          {
+		$escapedString = $this->real_escape_string($string);
+		return $escapedString;
+	}
+	
+	// @ "database neutral" functions:
+	
+	public function fetchArray($resultSet)         {
+		return $resultSet->fetch_array(MYSQLI_ASSOC);		
+	}
+	
+	public function stmtExecute($stmt)             {
+		return $stmt->execute();
+	}
+	
+	public function resultMetadata($stmt)          {
+		return $stmt->result_metadata();
+	}
+	
+	public function fetchField($meta)              {
+		return $meta->fetch_field();		
+	}
+	
+	public function fetchFields($result)           {
+		return $result->fetch_fields();
+	}
+	
+	public function stmtFetch($stmt)               {
+		return $stmt->fetch();
+	}
+	
+	public function numRows($resultSet)            {
+		return $resultSet->num_rows;
+	}
+	
+	public function affectedRows()                 {
+		return $this->affected_rows;
+	}
+	
+	public function insertId()                     {
+		return $this->insert_id;
+	}
+	
+	public function closeStmt($stmt)               {
+		return $stmt->close();
+	}
+	
+	public function setAutoCommit() {
+		$this->autocommit(FALSE);
+	}
+	
+	public function setCommit() {
+		$this->commit();
+	}
 
-	 function confirm_query($result) {
-    if (!$result) {
-      die ("Database query failed " . 
-            mysqli_connect_error() . 
-            " (" . mysqli_connect_errno() . ")"         
-      );
-      exit;
-    } 
-  }
-	
-  public function escape_value($string) {
-		$escaped_string = $this->real_escape_string(($string));
-    return $escaped_string;
-  }
-	
-	// "database neutral" functions
-	
-  public function fetch_array($result_set) {
-		 return mysqli_fetch_array($result_set);
-	}
-	
-	public function num_rows($result_set) {
-		return mysqli_num_rows($result_set);
-	}
-	
-//	public function insert_id() {
-//		return mysqli_insert_id($this->connection);
-//	}
-	
-	public function affected_rows() {
-		return mysqli_affected_rows($this->connection);
-	}
-	
-	public function fetch_fields($result) {
-		return mysqli_fetch_fields($result);
-	}
-	
 }
 
-$database = new MySQLDatabase();
+$database = new DB;
+DB::$con2 = new DB;
